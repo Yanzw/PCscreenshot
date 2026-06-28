@@ -17,8 +17,8 @@ namespace SnapShotPro.UI
         // toolbar buttons
         Button _btnArrow, _btnRect, _btnText, _btnMosaic;
         Button _btnUndo, _btnRedo;
-        Button _btnColor;
         Button _btnSave, _btnCopy, _btnClose;
+        Label  _toolbarSeparator;
         Panel  _colorSwatch;
 
         Color _currentColor = Color.Red;
@@ -58,8 +58,7 @@ namespace SnapShotPro.UI
             _btnMosaic.Width = 72;
 
             // separator
-            var sep = new Label { Width = 1, Height = 30, BackColor = Color.Gray,
-                                  Top = 7, Left = 4 * 70 + 8 };
+            _toolbarSeparator = new Label { Width = 1, Height = 30, BackColor = Color.Gray };
 
             _btnUndo = MakeToolBtn("撤销", 5);
             _btnRedo = MakeToolBtn("重做", 6);
@@ -68,9 +67,6 @@ namespace SnapShotPro.UI
             {
                 Size      = new Size(22, 22),
                 BackColor = _currentColor,
-                Top       = 11,
-                // place to the right of the 重做 (redo) button: redo Left(412) + Width(62) + gap(10)
-                Left      = _btnRedo.Left + _btnRedo.Width + 10,
                 Cursor    = Cursors.Hand,
                 BorderStyle = BorderStyle.FixedSingle
             };
@@ -83,11 +79,13 @@ namespace SnapShotPro.UI
             _toolbar.Controls.AddRange(new Control[]
             {
                 _btnArrow, _btnRect, _btnText, _btnMosaic,
-                sep,
+                _toolbarSeparator,
                 _btnUndo, _btnRedo,
                 _colorSwatch,
                 _btnSave, _btnCopy, _btnClose
             });
+            _toolbar.Layout += (s, e) => LayoutToolbar();
+            LayoutToolbar();
 
             // ── status bar ───────────────────────────────────────
             _statusLabel = new Label
@@ -135,7 +133,11 @@ namespace SnapShotPro.UI
             // size form to fit image + chrome
             int chromeW = Width  - ClientSize.Width;
             int chromeH = Height - ClientSize.Height;
-            int w = Math.Min(bmp.Width  + 16 + chromeW, Screen.PrimaryScreen.WorkingArea.Width  - 40);
+            int maxW = Screen.PrimaryScreen.WorkingArea.Width - 40;
+            int minToolbarW = Math.Min(GetToolbarContentWidth() + chromeW, maxW);
+            MinimumSize = new Size(Math.Max(MinimumSize.Width, minToolbarW), MinimumSize.Height);
+
+            int w = Math.Min(Math.Max(bmp.Width + 16 + chromeW, minToolbarW), maxW);
             int h = Math.Min(bmp.Height + 16 + _toolbar.Height + _statusLabel.Height + chromeH,
                              Screen.PrimaryScreen.WorkingArea.Height - 40);
             Size = new Size(w, h);
@@ -147,18 +149,10 @@ namespace SnapShotPro.UI
 
         Button MakeToolBtn(string label, int index)
         {
-            bool isRight = index >= 5;
-            int x = isRight
-                ? ClientSize.Width - (8 - index) * 70
-                : index * 70 + 4;
-
-            // We'll reflow in Resize; for now just lay them out
             var btn = new Button
             {
                 Text      = label,
                 Size      = new Size(62, 30),
-                Top       = 7,
-                Left      = index * 68 + 4,
                 FlatStyle = FlatStyle.Flat,
                 ForeColor = Color.White,
                 BackColor = Color.FromArgb(70, 70, 70),
@@ -174,8 +168,6 @@ namespace SnapShotPro.UI
             {
                 Text      = label,
                 Size      = new Size(62, 30),
-                Top       = 7,
-                Anchor    = AnchorStyles.Top | AnchorStyles.Right,
                 FlatStyle = FlatStyle.Flat,
                 ForeColor = Color.White,
                 BackColor = Color.FromArgb(70, 100, 70),
@@ -183,17 +175,60 @@ namespace SnapShotPro.UI
             };
             btn.FlatAppearance.BorderColor = Color.FromArgb(90, 120, 90);
 
-            // right-anchored positions set in Layout
-            _toolbar.Layout += (s, e) =>
-            {
-                btn.Left = _toolbar.Width - (3 - rightIndex) * 68 - 4;
-            };
-
             if (label == "保存")  btn.Click += (s, e) => DoSave();
             if (label == "复制")  btn.Click += (s, e) => DoCopy();
             if (label == "关闭")  btn.Click += (s, e) => Close();
 
             return btn;
+        }
+
+        void LayoutToolbar()
+        {
+            if (_btnClose == null) return;
+
+            int x = _toolbar.Padding.Left;
+            int y = 7;
+            PlaceToolbarControl(_btnArrow, ref x, y, 6);
+            PlaceToolbarControl(_btnRect, ref x, y, 6);
+            PlaceToolbarControl(_btnText, ref x, y, 6);
+            PlaceToolbarControl(_btnMosaic, ref x, y, 12);
+
+            _toolbarSeparator.SetBounds(x, y, _toolbarSeparator.Width, _toolbarSeparator.Height);
+            x += _toolbarSeparator.Width + 12;
+
+            PlaceToolbarControl(_btnUndo, ref x, y, 6);
+            PlaceToolbarControl(_btnRedo, ref x, y, 10);
+            _colorSwatch.SetBounds(x, 11, _colorSwatch.Width, _colorSwatch.Height);
+            x += _colorSwatch.Width + 14;
+
+            PlaceToolbarControl(_btnSave, ref x, y, 6);
+            PlaceToolbarControl(_btnCopy, ref x, y, 6);
+            PlaceToolbarControl(_btnClose, ref x, y, 0);
+        }
+
+        void PlaceToolbarControl(Control control, ref int x, int y, int gap)
+        {
+            control.SetBounds(x, y, control.Width, control.Height);
+            x += control.Width + gap;
+        }
+
+        int GetToolbarContentWidth()
+        {
+            if (_btnClose == null) return 400;
+
+            int x = _toolbar.Padding.Left;
+            x += _btnArrow.Width + 6;
+            x += _btnRect.Width + 6;
+            x += _btnText.Width + 6;
+            x += _btnMosaic.Width + 12;
+            x += _toolbarSeparator.Width + 12;
+            x += _btnUndo.Width + 6;
+            x += _btnRedo.Width + 10;
+            x += _colorSwatch.Width + 14;
+            x += _btnSave.Width + 6;
+            x += _btnCopy.Width + 6;
+            x += _btnClose.Width;
+            return x + _toolbar.Padding.Right;
         }
 
         void SelectTool(Button sender, ToolType type)
